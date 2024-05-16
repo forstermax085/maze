@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maze Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f4f8;
+        }
+        #gameContainer {
+            position: relative;
+            width: 600px;
+            height: 600px;
+            border: 5px solid #333;
+            background-color: white;
+        }
+        #mazeCanvas {
+            width: 100%;
+            height: 100%;
+        }
+        #message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: red;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div id="gameContainer">
+    <canvas id="mazeCanvas"></canvas>
+    <div id="message">You Win!</div>
+</div>
+
+<script>
+    const canvas = document.getElementById('mazeCanvas');
+    const ctx = canvas.getContext('2d');
+    const gameContainer = document.getElementById('gameContainer');
+    const message = document.getElementById('message');
+
+    canvas.width = gameContainer.clientWidth;
+    canvas.height = gameContainer.clientHeight;
+
+    const cols = 10;
+    const rows = 10;
+    const cellSize = canvas.width / cols;
+
+    const grid = [];
+    let current;
+    const stack = [];
+
+    class Cell {
+        constructor(col, row) {
+            this.col = col;
+            this.row = row;
+            this.walls = [true, true, true, true];
+            this.visited = false;
+        }
+
+        draw() {
+            const x = this.col * cellSize;
+            const y = this.row * cellSize;
+
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+
+            if (this.walls[0]) this.drawLine(x, y, x + cellSize, y); // Top
+            if (this.walls[1]) this.drawLine(x + cellSize, y, x + cellSize, y + cellSize); // Right
+            if (this.walls[2]) this.drawLine(x + cellSize, y + cellSize, x, y + cellSize); // Bottom
+            if (this.walls[3]) this.drawLine(x, y + cellSize, x, y); // Left
+
+            if (this.visited) {
+                ctx.fillStyle = '#bada55';
+                ctx.fillRect(x, y, cellSize, cellSize);
+            }
+        }
+
+        drawLine(x1, y1, x2, y2) {
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+        }
+
+        checkNeighbors() {
+            const neighbors = [];
+
+            const top = grid[this.index(this.col, this.row - 1)];
+            const right = grid[this.index(this.col + 1, this.row)];
+            const bottom = grid[this.index(this.col, this.row + 1)];
+            const left = grid[this.index(this.col - 1, this.row)];
+
+            if (top && !top.visited) neighbors.push(top);
+            if (right && !right.visited) neighbors.push(right);
+            if (bottom && !bottom.visited) neighbors.push(bottom);
+            if (left && !left.visited) neighbors.push(left);
+
+            if (neighbors.length > 0) {
+                const randomIndex = Math.floor(Math.random() * neighbors.length);
+                return neighbors[randomIndex];
+            } else {
+                return undefined;
+            }
+        }
+
+        index(col, row) {
+            if (col < 0 || row < 0 || col >= cols || row >= rows) {
+                return -1;
+            }
+            return col + row * cols;
+        }
+
+        highlight() {
+            const x = this.col * cellSize;
+            const y = this.row * cellSize;
+
+            ctx.fillStyle = 'blue';
+            ctx.fillRect(x, y, cellSize, cellSize);
+        }
+    }
+
+    function removeWalls(a, b) {
+        const x = a.col - b.col;
+        if (x === 1) {
+            a.walls[3] = false;
+            b.walls[1] = false;
+        } else if (x === -1) {
+            a.walls[1] = false;
+            b.walls[3] = false;
+        }
+
+        const y = a.row - b.row;
+        if (y === 1) {
+            a.walls[0] = false;
+            b.walls[2] = false;
+        } else if (y === -1) {
+            a.walls[2] = false;
+            b.walls[0] = false;
+        }
+    }
+
+    function setup() {
+        for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+                const cell = new Cell(col, row);
+                grid.push(cell);
+            }
+        }
+        current = grid[0];
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        grid.forEach(cell => cell.draw());
+
+        current.visited = true;
+        current.highlight();
+
+        const next = current.checkNeighbors();
+        if (next) {
+            next.visited = true;
+            stack.push(current);
+            removeWalls(current, next);
+            current = next;
+        } else if (stack.length > 0) {
+            current = stack.pop();
+        }
+
+        requestAnimationFrame(draw);
+    }
+
+    setup();
+    draw();
+
+    const player = {
+        x: 0,
+        y: 0,
+        size: cellSize / 2,
+        color: 'red'
+    };
+
+    function drawPlayer() {
+        ctx.fillStyle = player.color;
+        ctx.fillRect(player.x, player.y, player.size, player.size);
+    }
+
+    function movePlayer(x, y) {
+        const col = Math.floor(player.x / cellSize);
+        const row = Math.floor(player.y / cellSize);
+        const cell = grid[col + row * cols];
+
+        if (cell) {
+            if (x < 0 && !cell.walls[3]) player.x += x;
+            if (x > 0 && !cell.walls[1]) player.x += x;
+            if (y < 0 && !cell.walls[0]) player.y += y;
+            if (y > 0 && !cell.walls[2]) player.y += y;
+
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.size > canvas.width) player.x = canvas.width - player.size;
+            if (player.y < 0) player.y = 0;
+            if (player.y + player.size > canvas.height) player.y = canvas.height - player.size;
+
+            if (player.x >= canvas.width - player.size && player.y >= canvas.height - player.size) {
+                message.style.display = 'block';
+            }
+        }
+    }
+
+    window.addEventListener('keydown', (e) => {
+        switch (e.key) {
+            case 'ArrowUp':
+                movePlayer(0, -cellSize / 2);
+                break;
+            case 'ArrowDown':
+                movePlayer(0, cellSize / 2);
+                break;
+            case 'ArrowLeft':
+                movePlayer(-cellSize / 2, 0);
+                break;
+            case 'ArrowRight':
+                movePlayer(cellSize / 2, 0);
+                break;
+        }
+    });
+
+    drawPlayer();
+</script>
+
+</body>
+</html>
